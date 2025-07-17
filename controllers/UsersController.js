@@ -1,4 +1,5 @@
 import dbClient from '../utils/db.js';
+import redisClient from '../utils/redis.js';
 import { createHash } from 'crypto';
 
 class UsersController {
@@ -21,6 +22,22 @@ class UsersController {
     const result = await dbClient.usersCollection().insertOne({ email, password: hashedPassword });
 
     return res.status(201).json({ id: result.insertedId, email });
+  }
+
+  static async getMe(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const user = await dbClient.usersCollection().findOne({ _id: dbClient.objectId(userId) });
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    return res.status(200).json({ id: user._id, email: user.email });
   }
 }
 
