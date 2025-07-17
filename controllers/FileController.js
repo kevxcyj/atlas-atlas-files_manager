@@ -40,51 +40,5 @@ class FilesController {
         return res.status(400).json({ error: 'Parent is not a folder' });
       }
     }
-
-    // fileDocument for db
-    const fileDocument = {
-      userId: dbClient.objectId(userId),
-      name,
-      type,
-      isPublic,
-      parentId: parentId === 0 ? 0 : dbClient.objectId(parentId),
-    };
-
-    if (type === 'folder') {
-      const result = await dbClient.filesCollection().insertOne(fileDocument);
-      fileDocument.id = result.insertedId;
-      return res.status(201).json({
-        id: fileDocument.id,
-        userId: fileDocument.userId,
-        name,
-        type,
-        isPublic,
-        parentId: fileDocument.parentId,
-      });
-    }
-
-    // Handle file/image storage
-    const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
-    await fs.mkdir(folderPath, { recursive: true });
-    const filename = uuidv4();
-    const localPath = path.join(folderPath, filename);
-
-    await fs.writeFile(localPath, Buffer.from(data, 'base64'));
-
-    fileDocument.localPath = localPath;
-    const result = await dbClient.filesCollection().insertOne(fileDocument);
-
-    // New file info
-    return res.status(201).json({
-      id: result.insertedId,
-      userId: fileDocument.userId,
-      name,
-      type,
-      isPublic,
-      parentId: fileDocument.parentId,
-      localPath,
-    });
-  }
 }
-
-export default FilesController;
+}
