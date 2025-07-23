@@ -1,10 +1,11 @@
-/Documents/atlas-atlas-files_manager/controllers/FilesController.js
+import Queue from 'bull';
 import dbClient from '../utils/db.js';
 import redisClient from '../utils/redis.js';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 import path from 'path';
 
+const fileQueue = new Queue('fileQueue');
 const VALID_TYPES = ['folder', 'file', 'image'];
 
 class FilesController {
@@ -73,6 +74,10 @@ class FilesController {
 
     fileDocument.localPath = localPath;
     const result = await dbClient.filesCollection().insertOne(fileDocument);
+
+    if (type === 'image') {
+      await fileQueue.add({ userId: fileDocument.userId.toString(), fileId: result.insertedId.toString() });
+    }
 
     // New file info
     return res.status(201).json({
