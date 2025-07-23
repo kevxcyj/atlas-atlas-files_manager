@@ -1,4 +1,5 @@
 import Queue from 'bull';
+import mime from 'mime-types';
 import dbClient from '../utils/db.js';
 import redisClient from '../utils/redis.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -252,6 +253,58 @@ class FilesController {
       localPath: file.localPath,
     });
   }
+
+  static async getFile(req, res) {
+  const fileId = req.params.id;
+  let file;
+
+  // Find file document by ID
+  try {
+    file = await dbClient.filesCollection().findOne({
+      _id: dbClient.objectId(fileId),
+    });
+  } catch (err) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  if (!file) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  // Check if file is public or user is owner
+  let userId = null;
+  const token = req.headers['x-token'];
+  if (token) {
+    userId = await redisClient.get(`auth_${token}`);
+  }
+  const isOwner = userId && file.userId && file.userId.equals(dbClient.objectId(userId));
+  if (!file.isPublic && !isOwner) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  if (file.type === 'folder') {
+    return res.status(400).json({ error: "A folder doesn't have content" });
+  }
+
+  let localPath = file.localPath;
+  const { size } = req.query;
+  if (file.type === 'image' && size && ['100', '250', '500'].includes(size)) {
+    localPath = `${localPath}_${size}`;
+  }
+
+  try {
+    await fs.access(localPath);
+  } catch (err) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  // Get MIME type
+  const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+  const fileContent = await fs.readFile(localPath);
+
+  res.setHeader('Content-Type', mimeType);
+  return res.status(200).send(fileContent);
+}
+
 }
 
 
